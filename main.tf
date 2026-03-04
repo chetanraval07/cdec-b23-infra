@@ -16,20 +16,20 @@ terraform {
   }
 }
 
-# Provider
+#################################
+# PROVIDER
+#################################
+
 provider "aws" {
   region = "eu-west-1"
 }
 
 #################################
+# DATA SOURCES
+#################################
 
 data "aws_vpc" "default" {
   default = true
-}
-
-variable "cluster_name" {
-  type    = string
-  default = "my-cluster-23"
 }
 
 data "aws_subnets" "default" {
@@ -37,6 +37,15 @@ data "aws_subnets" "default" {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
+}
+
+#################################
+# VARIABLES
+#################################
+
+variable "cluster_name" {
+  type    = string
+  default = "my-cluster-23"
 }
 
 #################################
@@ -107,62 +116,34 @@ resource "aws_eks_cluster" "mycluster" {
 }
 
 #################################
-terraform {
-  required_version = ">= 1.3"
+# NODE GROUP
+#################################
 
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "6.26.0"
-    }
+resource "aws_eks_node_group" "nodegroup" {
+  cluster_name    = aws_eks_cluster.mycluster.name
+  node_group_name = "myb23-node-group"
+  node_role_arn   = aws_iam_role.node_role.arn
+  subnet_ids      = data.aws_subnets.default.ids
+
+  scaling_config {
+    desired_size = 2
+    min_size     = 1
+    max_size     = 3
   }
 
-  backend "s3" {
-    bucket  = "my-jenkins-bucket0203"
-    key     = "terraform.tfstate"
-    region  = "eu-central-1"
-    encrypt = true
-  }
-}
-
-# Provider
-provider "aws" {
-  region = "eu-west-1"
+  depends_on = [
+    aws_iam_role_policy_attachment.node_policies
+  ]
 }
 
 #################################
-
-data "aws_vpc" "default" {
-  default = true
-}
-
-variable "cluster_name" {
-  type    = string
-  default = "my-cluster-23"
-}
-
-data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
-
-#################################
-# IAM ROLE FOR EKS CLUSTER
+# OUTPUTS
 #################################
 
-resource "aws_iam_role" "eks_cluster_role" {
-  name = "eks-cluster-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "eks.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
+output "cluster_name" {
+  value = aws_eks_cluster.mycluster.name
 }
 
-resource "aws_iam_role_policy_attachment" "eks_cluster_policy" {
+output "cluster_endpoint" {
+  value = aws_eks_cluster.mycluster.endpoint
+}
